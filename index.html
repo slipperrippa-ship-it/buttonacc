@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Button Accordion</title>
+
+<!-- PWA / ホーム画面フルスクリーン起動（旧iOS対応のmetaタグ） -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Accordion">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1a1208">
+
+<style>
+/* 外部フォント読み込みを廃止（オフライン・旧端末で高速起動） */
+:root {
+  --bg:#1a1208; --panel:#231a0e; --leather:#3d2b1a;
+  --brass:#c8963c; --brass-hi:#f0c86a; --brass-sh:#7a5518;
+  --active:#ff9f1c;
+  --text:#d4b896; --dim:#7a6040; --inlay:#2a1f10;
+}
+* { margin:0; padding:0; -webkit-box-sizing:border-box; box-sizing:border-box; }
+html, body { height:100%; }
+body {
+  background:#1a1208; color:#d4b896;
+  font-family:"Courier New", Courier, monospace;
+  min-height:100vh;
+  display:-webkit-flex; display:flex;
+  -webkit-flex-direction:column; flex-direction:column;
+  -webkit-align-items:center; align-items:center;
+  -webkit-justify-content:center; justify-content:center;
+  padding:16px 12px;
+  overflow-x:hidden;
+  -webkit-touch-callout:none;
+  -webkit-user-select:none; user-select:none;
+}
+.app { display:-webkit-flex; display:flex; -webkit-flex-direction:column; flex-direction:column; -webkit-align-items:center; align-items:center; gap:14px; width:100%; max-width:880px; }
+header { text-align:center; }
+.title { font-family:Georgia, serif; font-size:30px; color:#f0c86a; letter-spacing:4px; }
+.subtitle { font-size:9px; letter-spacing:3px; color:#7a6040; text-transform:uppercase; margin-top:2px; font-style:italic; }
+
+.viz-frame { width:100%; height:40px; background:#2a1f10; border:2px solid #7a5518; border-radius:3px; overflow:hidden; }
+canvas#viz { width:100%; height:100%; display:block; }
+
+.controls { display:-webkit-flex; display:flex; -webkit-flex-wrap:wrap; flex-wrap:wrap; gap:10px 14px; background:#231a0e; border:1px solid #7a5518; border-radius:4px; padding:10px 14px; -webkit-justify-content:center; justify-content:center; -webkit-align-items:flex-end; align-items:flex-end; }
+.ctrl { display:-webkit-flex; display:flex; -webkit-flex-direction:column; flex-direction:column; -webkit-align-items:center; align-items:center; gap:4px; }
+.ctrl-label { font-size:8px; letter-spacing:2px; color:#c8963c; text-transform:uppercase; }
+input[type=range] { -webkit-appearance:none; appearance:none; width:62px; height:3px; background:rgba(200,150,60,0.2); border-radius:2px; outline:none; }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; height:14px; border-radius:50%; background:#c8963c; }
+.ctrl-val { font-size:10px; min-width:28px; text-align:center; }
+select { background:#2a1f10; border:1px solid #7a5518; color:#c8963c; font-family:inherit; font-size:10px; padding:3px 6px; border-radius:2px; outline:none; }
+.oct-row { display:-webkit-flex; display:flex; gap:7px; -webkit-align-items:center; align-items:center; }
+.oct-btn { background:#2a1f10; border:1px solid #7a5518; color:#c8963c; font-family:inherit; font-size:15px; width:30px; height:30px; border-radius:2px; }
+.oct-val { font-size:12px; color:#c8963c; min-width:16px; text-align:center; }
+
+#debug { font-size:10px; letter-spacing:1px; color:#c8963c; background:#2a1f10; border:1px solid #7a5518; border-radius:3px; padding:5px 12px; min-width:240px; text-align:center; }
+
+.accordion-body { background:#3d2b1a; border:3px solid #7a5518; border-radius:8px; padding:14px 16px 18px 16px; overflow-x:auto; max-width:100%; }
+.acc-grid { display:-webkit-flex; display:flex; -webkit-flex-direction:column; flex-direction:column; gap:5px; }
+.acc-row  { display:-webkit-flex; display:flex; gap:5px; }
+
+.btn {
+  width:38px; height:38px; border-radius:50%;
+  background:#c8963c;
+  background:-webkit-radial-gradient(35% 30%, circle, #f0c86a, #c8963c 50%, #7a5518);
+  background:radial-gradient(circle at 35% 30%, #f0c86a, #c8963c 50%, #7a5518);
+  border:2px solid #7a5518;
+  display:-webkit-flex; display:flex;
+  -webkit-flex-direction:column; flex-direction:column;
+  -webkit-align-items:center; align-items:center;
+  -webkit-justify-content:center; justify-content:center;
+  gap:1px; position:relative;
+  -webkit-flex-shrink:0; flex-shrink:0;
+  cursor:pointer;
+}
+.btn.active {
+  background:#ff9f1c;
+  background:-webkit-radial-gradient(35% 30%, circle, #ffe08a, #ff9f1c 50%, #c07010);
+  background:radial-gradient(circle at 35% 30%, #ffe08a, #ff9f1c 50%, #c07010);
+  border-color:#a06010;
+}
+.btn-note { font-size:9px; font-weight:bold; color:rgba(20,10,0,0.75); line-height:1; pointer-events:none; }
+.btn-key  { font-size:7px; color:rgba(20,10,0,0.4); line-height:1; pointer-events:none; }
+.btn.active .btn-note { color:rgba(255,255,255,0.9); }
+.btn.active .btn-key  { color:rgba(255,255,255,0.55); }
+.btn.is-c { -webkit-box-shadow:inset 0 0 0 2px rgba(40,20,0,0.45); box-shadow:inset 0 0 0 2px rgba(40,20,0,0.45); }
+
+.legend { font-size:9px; letter-spacing:1.5px; color:#7a6040; text-align:center; line-height:2; }
+.legend span { color:#c8963c; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div class="title">Button Accordion</div>
+    <div class="subtitle">Italian C-System / Logicool K380 JIS</div>
+  </header>
+
+  <div class="viz-frame"><canvas id="viz"></canvas></div>
+
+  <div class="controls">
+    <div class="ctrl">
+      <div class="ctrl-label">WAVE</div>
+      <select id="waveform">
+        <option value="sawtooth" selected>SAW</option>
+        <option value="sine">SINE</option>
+        <option value="triangle">TRI</option>
+        <option value="square">SQR</option>
+      </select>
+    </div>
+    <div class="ctrl">
+      <div class="ctrl-label">ATTACK</div>
+      <input type="range" id="attack" min="0.005" max="0.4" step="0.005" value="0.02">
+      <div class="ctrl-val" id="atkV">0.02</div>
+    </div>
+    <div class="ctrl">
+      <div class="ctrl-label">RELEASE</div>
+      <input type="range" id="release" min="0.05" max="2.5" step="0.05" value="0.5">
+      <div class="ctrl-val" id="relV">0.50</div>
+    </div>
+    <div class="ctrl">
+      <div class="ctrl-label">REVERB</div>
+      <input type="range" id="reverb" min="0" max="1" step="0.01" value="0.25">
+      <div class="ctrl-val" id="revV">0.25</div>
+    </div>
+    <div class="ctrl">
+      <div class="ctrl-label">VOLUME</div>
+      <input type="range" id="volume" min="0" max="1" step="0.01" value="0.7">
+      <div class="ctrl-val" id="volV">0.70</div>
+    </div>
+    <div class="ctrl">
+      <div class="ctrl-label">OCTAVE</div>
+      <div class="oct-row">
+        <button class="oct-btn" id="octDn">−</button>
+        <span class="oct-val" id="octV">4</span>
+        <button class="oct-btn" id="octUp">+</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="debug">キーを押すと判定結果が表示されます</div>
+
+  <div class="accordion-body">
+    <div class="acc-grid" id="accordion"></div>
+  </div>
+
+  <div class="legend">
+    右隣 <span>+3半音</span> / 斜め右上 <span>+1半音</span> / <span>C→F→T→6</span>=半音階<br>
+    <span>↑ 右Shift Enter</span> オクターブ上 / <span>↓ 左Shift Tab Caps</span> オクターブ下
+  </div>
+
+</div>
+
+<script>
+// ════════════════════════════════════════════════
+//  Logicool K380 JIS / イタリアCシステム
+//  MIDI = BASE + col*3 + row*(-2),  BASE=54
+//  KeyC = C4。C→F→T→6 = 半音階。
+//
+//  旧iPad mini(旧Safari)対応:
+//   - var使用・モダン構文回避
+//   - e.code 非対応環境向けに e.keyCode フォールバック
+//   - 外部フォント読み込みなし(高速起動)
+// ════════════════════════════════════════════════
+var GRID_ROWS = 4;
+var GRID_COLS = 13;
+
+var ROW_CODES = [
+  ['KeyZ','KeyX','KeyC','KeyV','KeyB','KeyN','KeyM','Comma','Period','Slash', null, null, null],
+  ['KeyA','KeyS','KeyD','KeyF','KeyG','KeyH','KeyJ','KeyK','KeyL','Semicolon','Quote', null, null],
+  ['KeyQ','KeyW','KeyE','KeyR','KeyT','KeyY','KeyU','KeyI','KeyO','KeyP','BracketLeft','BracketRight', null],
+  ['Digit1','Digit2','Digit3','Digit4','Digit5','Digit6','Digit7','Digit8','Digit9','Digit0','Minus','Equal','IntlRo'],
+];
+var ROW_LABELS = [
+  ['Z','X','C','V','B','N','M','、','。','・', '',   '',   ''],
+  ['A','S','D','F','G','H','J','K','L','れ', 'け', '',   ''],
+  ['Q','W','E','R','T','Y','U','I','O','P',  '@',  '[',  ''],
+  ['1','2','3','4','5','6','7','8','9','0',  'ほ', 'へ', 'ろ'],
+];
+
+// 旧Safari (e.code非対応) 向け keyCode → code 変換表
+// JISキーボードのkeyCode (Safari/WebKit)
+var KEYCODE_TO_CODE = {
+  90:'KeyZ', 88:'KeyX', 67:'KeyC', 86:'KeyV', 66:'KeyB', 78:'KeyN', 77:'KeyM',
+  188:'Comma', 190:'Period', 191:'Slash',
+  65:'KeyA', 83:'KeyS', 68:'KeyD', 70:'KeyF', 71:'KeyG', 72:'KeyH', 74:'KeyJ',
+  75:'KeyK', 76:'KeyL', 186:'Semicolon', 59:'Semicolon', 222:'Quote',
+  81:'KeyQ', 87:'KeyW', 69:'KeyE', 82:'KeyR', 84:'KeyT', 89:'KeyY', 85:'KeyU',
+  73:'KeyI', 79:'KeyO', 80:'KeyP', 219:'BracketLeft', 221:'BracketRight',
+  49:'Digit1', 50:'Digit2', 51:'Digit3', 52:'Digit4', 53:'Digit5',
+  54:'Digit6', 55:'Digit7', 56:'Digit8', 57:'Digit9', 48:'Digit0',
+  189:'Minus', 187:'Equal', 226:'IntlRo',
+  38:'ArrowUp', 40:'ArrowDown', 13:'Enter', 9:'Tab', 20:'CapsLock', 16:'Shift'
+};
+
+// イベントから物理キーコードを得る（新旧Safari両対応）
+function getCode(e) {
+  if (e.code) return e.code;
+  var c = KEYCODE_TO_CODE[e.keyCode];
+  if (c === 'Shift') {
+    // 旧APIでは左右Shift区別: location 1=左 2=右
+    return (e.location === 2) ? 'ShiftRight' : 'ShiftLeft';
+  }
+  return c || null;
+}
+
+var ROW_STAGGER_PX = [0, 22, 44, 66];
+var BASE_MIDI = 54;
+var octaveShift = 0;
+function getBase() { return BASE_MIDI + octaveShift; }
+function cellMidi(row, col) { return getBase() + col * 3 + row * (-2); }
+
+var NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+function noteName(midi) { return NOTE_NAMES[((midi % 12) + 12) % 12]; }
+function noteOct(midi)  { return Math.floor(midi / 12) - 1; }
+function midiToFreq(m)  { return 440 * Math.pow(2, (m - 69) / 12); }
+
+// ── Audio ──
+var actx = null, masterGain, dryGain, revGain, revNode, analyser;
+var activeNodes = {};
+
+function initAudio() {
+  if (actx) return;
+  var AC = window.AudioContext || window.webkitAudioContext;
+  actx = new AC();
+  analyser = actx.createAnalyser(); analyser.fftSize = 1024;
+  masterGain = actx.createGain(); masterGain.gain.value = 0.7;
+  dryGain = actx.createGain(); dryGain.gain.value = 0.8;
+  revGain = actx.createGain(); revGain.gain.value = 0.25;
+  revNode = actx.createConvolver();
+  var len = Math.floor(actx.sampleRate * 2.0);
+  var imp = actx.createBuffer(2, len, actx.sampleRate);
+  for (var ch = 0; ch < 2; ch++) {
+    var d = imp.getChannelData(ch);
+    for (var i = 0; i < len; i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/len, 2.5);
+  }
+  revNode.buffer = imp;
+  masterGain.connect(dryGain); masterGain.connect(revNode);
+  revNode.connect(revGain);
+  dryGain.connect(analyser); revGain.connect(analyser);
+  analyser.connect(actx.destination);
+}
+
+function ensureAudio() {
+  initAudio();
+  if (actx.state === 'suspended' && actx.resume) actx.resume();
+}
+
+function noteOn(code, freq) {
+  if (activeNodes[code]) return;
+  var atk = parseFloat(document.getElementById('attack').value);
+  var wave = document.getElementById('waveform').value;
+  var osc = actx.createOscillator();
+  var osc2 = actx.createOscillator();
+  var gain = actx.createGain();
+  osc.type = wave; osc2.type = wave;
+  osc.frequency.setValueAtTime(freq, actx.currentTime);
+  osc2.frequency.setValueAtTime(freq * 1.003, actx.currentTime);
+  gain.gain.setValueAtTime(0, actx.currentTime);
+  gain.gain.linearRampToValueAtTime(0.28, actx.currentTime + atk);
+  osc.connect(gain); osc2.connect(gain); gain.connect(masterGain);
+  osc.start(0); osc2.start(0);
+  activeNodes[code] = { osc: osc, osc2: osc2, gain: gain };
+}
+function noteOff(code) {
+  var node = activeNodes[code];
+  if (!node) return;
+  var rel = parseFloat(document.getElementById('release').value);
+  node.gain.gain.cancelScheduledValues(actx.currentTime);
+  node.gain.gain.setValueAtTime(node.gain.gain.value, actx.currentTime);
+  node.gain.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + rel);
+  node.osc.stop(actx.currentTime + rel + 0.05);
+  node.osc2.stop(actx.currentTime + rel + 0.05);
+  delete activeNodes[code];
+}
+function triggerOn(code, midi, el) {
+  if (activeNodes[code]) return;
+  noteOn(code, midiToFreq(midi));
+  el.className = el.className.replace(' active','') + ' active';
+}
+function triggerOff(code, el) {
+  if (!activeNodes[code]) return;
+  noteOff(code);
+  el.className = el.className.replace(' active','');
+}
+
+// ── Build DOM ──
+var btnMap = {};
+
+function makeHandler(code, row, col, btn) {
+  return {
+    down: function(e) { e.preventDefault(); ensureAudio(); triggerOn(code, cellMidi(row,col), btn); },
+    up:   function(e) { if (e && e.preventDefault) e.preventDefault(); triggerOff(code, btn); }
+  };
+}
+
+function buildGrid() {
+  var grid = document.getElementById('accordion');
+  grid.innerHTML = '';
+  btnMap = {};
+  for (var row = GRID_ROWS - 1; row >= 0; row--) {
+    var rowEl = document.createElement('div');
+    rowEl.className = 'acc-row';
+    rowEl.style.paddingLeft = ROW_STAGGER_PX[row] + 'px';
+    for (var col = 0; col < GRID_COLS; col++) {
+      var code = ROW_CODES[row][col];
+      if (!code) {
+        var sp = document.createElement('div');
+        sp.style.width = '38px'; sp.style.height = '38px';
+        sp.style.webkitFlexShrink = '0'; sp.style.flexShrink = '0';
+        rowEl.appendChild(sp);
+        continue;
+      }
+      var midi = cellMidi(row, col);
+      var name = noteName(midi);
+      var oct = noteOct(midi);
+      var label = ROW_LABELS[row][col];
+      var btn = document.createElement('div');
+      btn.className = 'btn' + (name === 'C' ? ' is-c' : '');
+      btn.innerHTML = '<span class="btn-note">' + name + '<sub style="font-size:5px;opacity:0.5">' + oct + '</sub></span><span class="btn-key">' + label + '</span>';
+
+      var h = makeHandler(code, row, col, btn);
+      btn.addEventListener('mousedown', h.down, false);
+      btn.addEventListener('mouseup', h.up, false);
+      btn.addEventListener('mouseleave', h.up, false);
+      btn.addEventListener('touchstart', h.down, false);
+      btn.addEventListener('touchend', h.up, false);
+      btn.addEventListener('touchcancel', h.up, false);
+
+      btnMap[code] = { el: btn, row: row, col: col };
+      rowEl.appendChild(btn);
+    }
+    grid.appendChild(rowEl);
+  }
+}
+
+function refreshLabels() {
+  for (var code in btnMap) {
+    var entry = btnMap[code];
+    var midi = cellMidi(entry.row, entry.col);
+    var name = noteName(midi);
+    var oct = noteOct(midi);
+    var noteEl = entry.el.querySelector('.btn-note');
+    noteEl.innerHTML = name + '<sub style="font-size:5px;opacity:0.5">' + oct + '</sub>';
+    var isC = (name === 'C');
+    var cls = entry.el.className.replace(' is-c','');
+    entry.el.className = isC ? cls + ' is-c' : cls;
+  }
+}
+
+// ── Keyboard ──
+var heldCodes = {};
+
+document.addEventListener('keydown', function(e) {
+  var code = getCode(e);
+  document.getElementById('debug').textContent =
+    'code: "' + (e.code || '(非対応)') + '"  keyCode: ' + e.keyCode + '  → ' + (code || '未割当');
+
+  if (e.repeat || e.ctrlKey || e.altKey || e.metaKey) return;
+  if (!code) return;
+
+  if (code === 'ArrowDown') { changeOctave(-1); return; }
+  if (code === 'ArrowUp')   { changeOctave(1);  return; }
+  if (code === 'ShiftRight' || code === 'Enter') { e.preventDefault(); changeOctave(1); return; }
+  if (code === 'ShiftLeft' || code === 'Tab' || code === 'CapsLock') { e.preventDefault(); changeOctave(-1); return; }
+
+  var entry = btnMap[code];
+  if (entry && !heldCodes[code]) {
+    e.preventDefault();
+    ensureAudio();
+    heldCodes[code] = true;
+    triggerOn(code, cellMidi(entry.row, entry.col), entry.el);
+  }
+}, false);
+
+document.addEventListener('keyup', function(e) {
+  var code = getCode(e);
+  if (!code) return;
+  var entry = btnMap[code];
+  if (entry) { delete heldCodes[code]; triggerOff(code, entry.el); }
+}, false);
+
+// ── Octave ──
+var displayOctave = 4;
+function changeOctave(d) {
+  var next = Math.max(1, Math.min(7, displayOctave + d));
+  octaveShift += (next - displayOctave) * 12;
+  displayOctave = next;
+  document.getElementById('octV').textContent = displayOctave;
+  refreshLabels();
+}
+document.getElementById('octDn').addEventListener('click', function(){ changeOctave(-1); }, false);
+document.getElementById('octUp').addEventListener('click', function(){ changeOctave(1); }, false);
+
+// ── Sliders ──
+function bindSlider(id, valId) {
+  var el = document.getElementById(id);
+  var vl = document.getElementById(valId);
+  el.addEventListener('input', function() {
+    vl.textContent = parseFloat(el.value).toFixed(2);
+    if (id === 'volume' && masterGain) masterGain.gain.value = parseFloat(el.value);
+    if (id === 'reverb' && revGain) {
+      revGain.gain.value = parseFloat(el.value);
+      dryGain.gain.value = 1 - parseFloat(el.value) * 0.4;
+    }
+  }, false);
+}
+bindSlider('attack','atkV'); bindSlider('release','relV');
+bindSlider('reverb','revV'); bindSlider('volume','volV');
+
+// ── Visualizer ──
+var canvas = document.getElementById('viz');
+var cvCtx = canvas.getContext('2d');
+function resizeCanvas() { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; }
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas, false);
+
+function drawViz() {
+  if (window.requestAnimationFrame) requestAnimationFrame(drawViz);
+  else setTimeout(drawViz, 50);
+  if (!analyser) {
+    cvCtx.fillStyle = '#2a1f10';
+    cvCtx.fillRect(0, 0, canvas.width, canvas.height);
+    return;
+  }
+  var buf = new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteTimeDomainData(buf);
+  cvCtx.fillStyle = 'rgba(26,18,8,0.7)';
+  cvCtx.fillRect(0, 0, canvas.width, canvas.height);
+  cvCtx.lineWidth = 1.5;
+  cvCtx.strokeStyle = '#c8963c';
+  cvCtx.beginPath();
+  var sw = canvas.width / buf.length;
+  var x = 0;
+  for (var i = 0; i < buf.length; i++) {
+    var y = (buf[i] / 128) * canvas.height / 2;
+    if (i === 0) cvCtx.moveTo(x, y); else cvCtx.lineTo(x, y);
+    x += sw;
+  }
+  cvCtx.stroke();
+}
+drawViz();
+buildGrid();
+
+// 初回タップでオーディオ起動（iOS制約対策）
+document.body.addEventListener('touchstart', function once() {
+  ensureAudio();
+  document.body.removeEventListener('touchstart', once, false);
+}, false);
+document.body.addEventListener('mousedown', function once2() {
+  ensureAudio();
+  document.body.removeEventListener('mousedown', once2, false);
+}, false);
+</script>
+</body>
+</html>
