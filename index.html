@@ -29,13 +29,44 @@ body {
   display:-webkit-flex; display:flex;
   -webkit-flex-direction:column; flex-direction:column;
   -webkit-align-items:center; align-items:center;
-  -webkit-justify-content:center; justify-content:center;
-  padding:16px 12px;
-  overflow-x:hidden;
+  -webkit-justify-content:flex-start; justify-content:flex-start;
+  padding:12px 8px;
+  overflow-x:auto;
   -webkit-touch-callout:none;
   -webkit-user-select:none; user-select:none;
 }
 .app { display:-webkit-flex; display:flex; -webkit-flex-direction:column; flex-direction:column; -webkit-align-items:center; align-items:center; gap:14px; width:100%; max-width:880px; }
+
+/* 画面回転に追従しない：横向きのとき内容を90度回して縦表示を維持 */
+@media screen and (orientation: landscape) and (max-width: 1024px) {
+  body {
+    -webkit-transform: rotate(-90deg);
+    transform: rotate(-90deg);
+    -webkit-transform-origin: left top;
+    transform-origin: left top;
+    width: 100vh;
+    height: 100vw;
+    position: absolute;
+    top: 100vw;
+    left: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+}
+
+/* 縦向き固定: 端末を横にしても中身を90度回転させて縦表示を維持 */
+@media screen and (orientation: landscape) and (max-width: 1100px) {
+  html, body { overflow:hidden; }
+  body {
+    /* ビューポートの縦横を入れ替えて回転 */
+    width:100vh; height:100vw;
+    -webkit-transform:rotate(90deg); transform:rotate(90deg);
+    -webkit-transform-origin:bottom left; transform-origin:bottom left;
+    position:absolute;
+    top:-100vw; left:0;
+    overflow-y:auto; overflow-x:hidden;
+  }
+}
 header { text-align:center; }
 .title { font-family:Georgia, serif; font-size:30px; color:#f0c86a; letter-spacing:4px; }
 .subtitle { font-size:9px; letter-spacing:3px; color:#7a6040; text-transform:uppercase; margin-top:2px; font-style:italic; }
@@ -57,15 +88,13 @@ select { background:#2a1f10; border:1px solid #7a5518; color:#c8963c; font-famil
 #debug { font-size:10px; letter-spacing:1px; color:#c8963c; background:#2a1f10; border:1px solid #7a5518; border-radius:3px; padding:5px 12px; min-width:240px; text-align:center; }
 
 .accordion-body { background:#3d2b1a; border:3px solid #7a5518; border-radius:8px; padding:14px 16px 18px 16px; overflow-x:auto; max-width:100%; }
-.acc-grid { display:-webkit-flex; display:flex; -webkit-flex-direction:column; flex-direction:column; gap:5px; }
-.acc-row  { display:-webkit-flex; display:flex; gap:5px; }
+.acc-grid { display:-webkit-flex; display:flex; -webkit-flex-direction:row; flex-direction:row; gap:6px; -webkit-align-items:flex-start; align-items:flex-start; }
+/* 各キーボード行が「縦の列」になる */
+.acc-col { display:-webkit-flex; display:flex; -webkit-flex-direction:column; flex-direction:column; gap:6px; }
 
 .btn {
-  width:38px; height:38px; border-radius:50%;
-  background:#c8963c;
-  background:-webkit-radial-gradient(35% 30%, circle, #f0c86a, #c8963c 50%, #7a5518);
-  background:radial-gradient(circle at 35% 30%, #f0c86a, #c8963c 50%, #7a5518);
-  border:2px solid #7a5518;
+  width:15mm; height:15mm; border-radius:50%;
+  border:2px solid rgba(0,0,0,0.25);
   display:-webkit-flex; display:flex;
   -webkit-flex-direction:column; flex-direction:column;
   -webkit-align-items:center; align-items:center;
@@ -74,20 +103,58 @@ select { background:#2a1f10; border:1px solid #7a5518; color:#c8963c; font-famil
   -webkit-flex-shrink:0; flex-shrink:0;
   cursor:pointer;
 }
+/* ナチュラル音(白鍵) = 白ボタン */
+.btn.note-natural {
+  background:#f0f0f0;
+  background:-webkit-radial-gradient(35% 30%, circle, #ffffff, #e2e2e6 60%, #c2c2c8);
+  background:radial-gradient(circle at 35% 30%, #ffffff, #e2e2e6 60%, #c2c2c8);
+  border-color:#b0b0b8;
+}
+/* シャープ音(黒鍵) = 青ボタン */
+.btn.note-sharp {
+  background:#2f6fd0;
+  background:-webkit-radial-gradient(35% 30%, circle, #6ea8ff, #2f6fd0 55%, #18468c);
+  background:radial-gradient(circle at 35% 30%, #6ea8ff, #2f6fd0 55%, #18468c);
+  border-color:#163d7a;
+}
 .btn.active {
-  background:#ff9f1c;
-  background:-webkit-radial-gradient(35% 30%, circle, #ffe08a, #ff9f1c 50%, #c07010);
-  background:radial-gradient(circle at 35% 30%, #ffe08a, #ff9f1c 50%, #c07010);
+  background:#ff9f1c !important;
+  background:-webkit-radial-gradient(35% 30%, circle, #ffe08a, #ff9f1c 50%, #c07010) !important;
+  background:radial-gradient(circle at 35% 30%, #ffe08a, #ff9f1c 50%, #c07010) !important;
   border-color:#a06010;
 }
-.btn-note { font-size:9px; font-weight:bold; color:rgba(20,10,0,0.75); line-height:1; pointer-events:none; }
-.btn-key  { font-size:7px; color:rgba(20,10,0,0.4); line-height:1; pointer-events:none; }
-.btn.active .btn-note { color:rgba(255,255,255,0.9); }
-.btn.active .btn-key  { color:rgba(255,255,255,0.55); }
-.btn.is-c { -webkit-box-shadow:inset 0 0 0 2px rgba(40,20,0,0.45); box-shadow:inset 0 0 0 2px rgba(40,20,0,0.45); }
+/* 文字色: 白ボタンは黒文字、青ボタンは白文字 */
+.btn.note-natural .btn-note { color:rgba(20,20,30,0.85); }
+.btn.note-natural .btn-key  { color:rgba(20,20,30,0.45); }
+.btn.note-sharp .btn-note { color:rgba(255,255,255,0.95); }
+.btn.note-sharp .btn-key  { color:rgba(255,255,255,0.6); }
+.btn-note { font-size:13px; font-weight:bold; line-height:1; pointer-events:none; }
+.btn-key  { font-size:9px; line-height:1; pointer-events:none; }
+.btn.active .btn-note { color:rgba(80,40,0,0.9) !important; }
+.btn.active .btn-key  { color:rgba(80,40,0,0.55) !important; }
+.btn.is-c { -webkit-box-shadow:inset 0 0 0 2px rgba(0,0,0,0.4); box-shadow:inset 0 0 0 2px rgba(0,0,0,0.4); }
 
 .legend { font-size:9px; letter-spacing:1.5px; color:#7a6040; text-align:center; line-height:2; }
 .legend span { color:#c8963c; }
+
+/* 五線譜 + ボタンの横並びステージ */
+.stage { display:-webkit-flex; display:flex; -webkit-flex-direction:row; flex-direction:row; -webkit-align-items:flex-start; align-items:flex-start; gap:8px; }
+.staff-panel {
+  position:-webkit-sticky; position:sticky; top:8px;
+  -webkit-flex-shrink:0; flex-shrink:0;
+  width:96px; height:340px;
+  background:#f7f4ec; border:2px solid #7a5518; border-radius:6px;
+  padding:0; overflow:hidden;
+}
+/* SVGは横長(340x96)で描き、-90度回転して縦長パネルに収める。
+   → スマホを反時計回りに横にすると五線譜が正しい向きで見える */
+#staff {
+  width:340px; height:96px; display:block;
+  -webkit-transform:rotate(-90deg); transform:rotate(-90deg);
+  -webkit-transform-origin:top left; transform-origin:top left;
+  position:relative;
+  top:340px; left:0;
+}
 </style>
 </head>
 <body>
@@ -142,8 +209,13 @@ select { background:#2a1f10; border:1px solid #7a5518; color:#c8963c; font-famil
 
   <div id="debug">キーを押すと判定結果が表示されます</div>
 
-  <div class="accordion-body">
-    <div class="acc-grid" id="accordion"></div>
+  <div class="stage">
+    <div class="staff-panel">
+      <svg id="staff" viewBox="0 0 340 96" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+    <div class="accordion-body">
+      <div class="acc-grid" id="accordion"></div>
+    </div>
   </div>
 
   <div class="legend">
@@ -206,7 +278,11 @@ function getCode(e) {
   return c || null;
 }
 
-var ROW_STAGGER_PX = [0, 22, 44, 66];
+// 半音階が斜め一直線に揃うよう、各列を「ボタンピッチの1/3」ずつ縦にずらす。
+// ボタン15mm + 列内gap6px(約1.6mm) ≈ ピッチ16.6mm。その1/3 ≈ 5.5mm。
+// 右下→左上に半音階が上がるよう、左の列(row小)ほど下げる＝オフセット反転。
+var STAGGER_STEP_MM = 5.5;
+function staggerMm(row) { return (STAGGER_STEP_MM * (GRID_ROWS - 1 - row)).toFixed(2) + 'mm'; }
 var BASE_MIDI = 54;
 var octaveShift = 0;
 function getBase() { return BASE_MIDI + octaveShift; }
@@ -224,31 +300,70 @@ var activeNodes = {};
 function initAudio() {
   if (actx) return;
   var AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) { return; } // 非対応環境
   actx = new AC();
-  analyser = actx.createAnalyser(); analyser.fftSize = 1024;
+
+  // 旧WebKitは createGain が createGainNode の場合がある
+  if (!actx.createGain && actx.createGainNode) actx.createGain = actx.createGainNode;
+
+  try { analyser = actx.createAnalyser(); analyser.fftSize = 1024; } catch (e) { analyser = null; }
   masterGain = actx.createGain(); masterGain.gain.value = 0.7;
   dryGain = actx.createGain(); dryGain.gain.value = 0.8;
   revGain = actx.createGain(); revGain.gain.value = 0.25;
-  revNode = actx.createConvolver();
-  var len = Math.floor(actx.sampleRate * 2.0);
-  var imp = actx.createBuffer(2, len, actx.sampleRate);
-  for (var ch = 0; ch < 2; ch++) {
-    var d = imp.getChannelData(ch);
-    for (var i = 0; i < len; i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/len, 2.5);
+
+  // リバーブ（Convolver）は古い端末で非対応/重いことがあるので try で保護
+  revNode = null;
+  try {
+    if (actx.createConvolver) {
+      revNode = actx.createConvolver();
+      var len = Math.floor(actx.sampleRate * 1.5);
+      var imp = actx.createBuffer(2, len, actx.sampleRate);
+      for (var ch = 0; ch < 2; ch++) {
+        var d = imp.getChannelData(ch);
+        for (var i = 0; i < len; i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/len, 2.5);
+      }
+      revNode.buffer = imp;
+    }
+  } catch (e2) { revNode = null; }
+
+  // 接続（リバーブが無くてもドライ音は必ず鳴る）
+  masterGain.connect(dryGain);
+  if (revNode) { masterGain.connect(revNode); revNode.connect(revGain); }
+  if (analyser) {
+    dryGain.connect(analyser);
+    if (revNode) revGain.connect(analyser);
+    analyser.connect(actx.destination);
+  } else {
+    dryGain.connect(actx.destination);
+    if (revNode) revGain.connect(actx.destination);
   }
-  revNode.buffer = imp;
-  masterGain.connect(dryGain); masterGain.connect(revNode);
-  revNode.connect(revGain);
-  dryGain.connect(analyser); revGain.connect(analyser);
-  analyser.connect(actx.destination);
 }
 
 function ensureAudio() {
   initAudio();
-  if (actx.state === 'suspended' && actx.resume) actx.resume();
+  if (!actx) return;
+  // resume（新API）
+  if (actx.state === 'suspended' && actx.resume) {
+    try { actx.resume(); } catch (e) {}
+  }
+  // 旧iOSアンロック: 無音バッファを1回再生
+  if (!actx._unlocked) {
+    try {
+      var b = actx.createBuffer(1, 1, 22050);
+      var src = actx.createBufferSource();
+      src.buffer = b;
+      src.connect(actx.destination);
+      if (src.start) src.start(0); else if (src.noteOn) src.noteOn(0);
+      actx._unlocked = true;
+    } catch (e) {}
+  }
 }
 
+function startOsc(osc, t) { if (osc.start) osc.start(t); else if (osc.noteOn) osc.noteOn(t); }
+function stopOsc(osc, t)  { if (osc.stop) osc.stop(t); else if (osc.noteOff) osc.noteOff(t); }
+
 function noteOn(code, freq) {
+  if (!actx) return;
   if (activeNodes[code]) return;
   var atk = parseFloat(document.getElementById('attack').value);
   var wave = document.getElementById('waveform').value;
@@ -256,35 +371,208 @@ function noteOn(code, freq) {
   var osc2 = actx.createOscillator();
   var gain = actx.createGain();
   osc.type = wave; osc2.type = wave;
-  osc.frequency.setValueAtTime(freq, actx.currentTime);
-  osc2.frequency.setValueAtTime(freq * 1.003, actx.currentTime);
-  gain.gain.setValueAtTime(0, actx.currentTime);
-  gain.gain.linearRampToValueAtTime(0.28, actx.currentTime + atk);
+  var now = actx.currentTime;
+  osc.frequency.setValueAtTime(freq, now);
+  osc2.frequency.setValueAtTime(freq * 1.003, now);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.linearRampToValueAtTime(0.28, now + atk);
   osc.connect(gain); osc2.connect(gain); gain.connect(masterGain);
-  osc.start(0); osc2.start(0);
+  startOsc(osc, now); startOsc(osc2, now);
   activeNodes[code] = { osc: osc, osc2: osc2, gain: gain };
 }
 function noteOff(code) {
   var node = activeNodes[code];
-  if (!node) return;
+  if (!node || !actx) return;
   var rel = parseFloat(document.getElementById('release').value);
-  node.gain.gain.cancelScheduledValues(actx.currentTime);
-  node.gain.gain.setValueAtTime(node.gain.gain.value, actx.currentTime);
-  node.gain.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + rel);
-  node.osc.stop(actx.currentTime + rel + 0.05);
-  node.osc2.stop(actx.currentTime + rel + 0.05);
+  var now = actx.currentTime;
+  try {
+    node.gain.gain.cancelScheduledValues(now);
+    node.gain.gain.setValueAtTime(node.gain.gain.value, now);
+    node.gain.gain.exponentialRampToValueAtTime(0.0001, now + rel);
+  } catch (e) {}
+  stopOsc(node.osc, now + rel + 0.05);
+  stopOsc(node.osc2, now + rel + 0.05);
   delete activeNodes[code];
 }
 function triggerOn(code, midi, el) {
   if (activeNodes[code]) return;
   noteOn(code, midiToFreq(midi));
   el.className = el.className.replace(' active','') + ' active';
+  soundingMidi[code] = displayMidi(midi); // オクターブシフトを除いた基準音を表示
+  renderStaff();
 }
 function triggerOff(code, el) {
   if (!activeNodes[code]) return;
   noteOff(code);
   el.className = el.className.replace(' active','');
+  delete soundingMidi[code];
+  renderStaff();
 }
+
+// ── 五線譜（高音譜表） ──
+// 現在鳴っている音を管理。オクターブシフトは無視し、
+// 「基準オクターブでのMIDI」= BASE_MIDI基準のセル音 を表示する。
+// これにより KeyC は常に低いド(C4)位置に固定され、
+// オクターブ変更しても五線譜の見た目は変わらない。
+var soundingMidi = {};   // code → 表示用の固定MIDI(オクターブシフト無視)
+
+// セルの「表示用MIDI」: octaveShiftを引いて基準オクターブに戻す
+function displayMidi(realMidi) { return realMidi - octaveShift; }
+
+// 高音譜表ステップ算出（C4基準）
+var DIATONIC_STEP = {0:0, 2:1, 4:2, 5:3, 7:4, 9:5, 11:6};
+function midiToStaff(midi) {
+  var pc = ((midi % 12) + 12) % 12;
+  var sharp = false;
+  var basePc = pc;
+  if (DIATONIC_STEP[pc] === undefined) { sharp = true; basePc = pc - 1; }
+  var octave = Math.floor(midi / 12) - 1;
+  var stepFromC0 = octave * 7 + DIATONIC_STEP[basePc];
+  var stepFromE4 = stepFromC0 - 30; // E4=第1線=step0
+  return { step: stepFromE4, sharp: sharp };
+}
+
+var STAFF_NS = 'http://www.w3.org/2000/svg';
+function renderStaff() {
+  var svg = document.getElementById('staff');
+  if (!svg) return;
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+  // 横長 340x96。五線は横線5本。第1線(下)=E4。
+  var xL = 44, xR = 332;
+  var lineGap = 9;            // 線間隔
+  var topY = 26;              // 第5線(上)のy
+  var baseY = topY + lineGap * 4; // 第1線(下)=E4 のy
+  var stepPx = lineGap / 2;
+  function stepToY(step) { return baseY - step * stepPx; }
+
+  // 五線
+  for (var i = 0; i < 5; i++) {
+    var y = topY + i * lineGap;
+    var ln = document.createElementNS(STAFF_NS, 'line');
+    ln.setAttribute('x1', xL); ln.setAttribute('y1', y);
+    ln.setAttribute('x2', xR); ln.setAttribute('y2', y);
+    ln.setAttribute('stroke', '#333'); ln.setAttribute('stroke-width', '0.8');
+    svg.appendChild(ln);
+  }
+  // ト音記号
+  var clef = document.createElementNS(STAFF_NS, 'text');
+  clef.setAttribute('x', 8); clef.setAttribute('y', baseY + 2);
+  clef.setAttribute('font-size', '46'); clef.setAttribute('fill', '#333');
+  clef.setAttribute('font-family', 'Georgia, serif');
+  clef.textContent = '\uD834\uDD1E';
+  svg.appendChild(clef);
+
+  // 鳴っている音（表示用MIDI）を左から順に並べる
+  var midis = [];
+  var seen = {};
+  for (var code in soundingMidi) {
+    var dm = soundingMidi[code];
+    if (seen[dm]) continue; seen[dm] = true;
+    midis.push(dm);
+  }
+  midis.sort(function(a,b){ return a-b; });
+
+  // 1音を描く関数（符頭・符幹・♯・加線・ラベル）
+  function drawNote(midi, noteX, withLabel) {
+    var info = midiToStaff(midi);
+    var cy = stepToY(info.step);
+    drawLedgerLines(svg, info.step, noteX, stepPx, baseY, lineGap);
+    var head = document.createElementNS(STAFF_NS, 'ellipse');
+    head.setAttribute('cx', noteX); head.setAttribute('cy', cy);
+    head.setAttribute('rx', 4.6); head.setAttribute('ry', 3.4);
+    head.setAttribute('transform', 'rotate(-20 ' + noteX + ' ' + cy + ')');
+    head.setAttribute('fill', '#1a1208');
+    svg.appendChild(head);
+    if (info.sharp) {
+      var sh = document.createElementNS(STAFF_NS, 'text');
+      sh.setAttribute('x', noteX - 15); sh.setAttribute('y', cy + 4);
+      sh.setAttribute('font-size', '14'); sh.setAttribute('fill', '#18468c');
+      sh.setAttribute('font-weight', 'bold');
+      sh.textContent = '\u266F';
+      svg.appendChild(sh);
+    }
+    if (withLabel) {
+      var lbl = document.createElementNS(STAFF_NS, 'text');
+      lbl.setAttribute('x', noteX); lbl.setAttribute('y', 90);
+      lbl.setAttribute('font-size', '10'); lbl.setAttribute('fill', '#7a5518');
+      lbl.setAttribute('text-anchor', 'middle');
+      lbl.textContent = noteName(midi) + noteOct(midi);
+      svg.appendChild(lbl);
+    }
+    return cy;
+  }
+
+  // 1スロット分（重ねた複数音＋共通符幹）を描く
+  function drawStack(midiArr, noteX) {
+    var cys = [];
+    for (var j = 0; j < midiArr.length; j++) {
+      cys.push(drawNote(midiArr[j], noteX, false));
+    }
+    // 共通符幹（最も低い符頭から上へ）
+    var maxCy = Math.max.apply(null, cys); // 一番下(低音)の符頭
+    var minCy = Math.min.apply(null, cys); // 一番上(高音)の符頭
+    var stem = document.createElementNS(STAFF_NS, 'line');
+    stem.setAttribute('x1', noteX + 4.4); stem.setAttribute('y1', maxCy);
+    stem.setAttribute('x2', noteX + 4.4); stem.setAttribute('y2', minCy - 24);
+    stem.setAttribute('stroke', '#1a1208'); stem.setAttribute('stroke-width', '1.1');
+    svg.appendChild(stem);
+  }
+
+  if (midis.length === 0) return;
+
+  var slotX = 80, slotStep = 30;
+  var slotIndex = 0;
+
+  // ① 和音（重ね）スロット ※2音以上のときのみ
+  if (midis.length >= 2) {
+    var stackX = slotX + slotIndex * slotStep;
+    drawStack(midis, stackX);
+    // 和音ラベル（重ねスロットの下に "Chord"）
+    var clbl = document.createElementNS(STAFF_NS, 'text');
+    clbl.setAttribute('x', stackX); clbl.setAttribute('y', 90);
+    clbl.setAttribute('font-size', '9'); clbl.setAttribute('fill', '#7a5518');
+    clbl.setAttribute('text-anchor', 'middle');
+    clbl.textContent = '和音';
+    svg.appendChild(clbl);
+    slotIndex++;
+    // 区切り線
+    var sep = document.createElementNS(STAFF_NS, 'line');
+    var sepX = slotX + slotIndex * slotStep - slotStep/2;
+    sep.setAttribute('x1', sepX); sep.setAttribute('y1', 18);
+    sep.setAttribute('x2', sepX); sep.setAttribute('y2', 78);
+    sep.setAttribute('stroke', '#c8b890'); sep.setAttribute('stroke-width', '0.6');
+    svg.appendChild(sep);
+  }
+
+  // ② 分解（アルペジオ）: 低い順に1音ずつ
+  for (var k = 0; k < midis.length; k++) {
+    var noteX = slotX + slotIndex * slotStep;
+    if (noteX > xR - 10) noteX = xR - 10;
+    var cy = drawNote(midis[k], noteX, true);
+    var stem = document.createElementNS(STAFF_NS, 'line');
+    stem.setAttribute('x1', noteX + 4.4); stem.setAttribute('y1', cy);
+    stem.setAttribute('x2', noteX + 4.4); stem.setAttribute('y2', cy - 24);
+    stem.setAttribute('stroke', '#1a1208'); stem.setAttribute('stroke-width', '1.1');
+    svg.appendChild(stem);
+    slotIndex++;
+  }
+}
+
+function drawLedgerLines(svg, step, noteX, stepPx, baseY, lineGap) {
+  var lx1 = noteX - 7, lx2 = noteX + 7;
+  function addLine(yy) {
+    var ln = document.createElementNS(STAFF_NS, 'line');
+    ln.setAttribute('x1', lx1); ln.setAttribute('y1', yy);
+    ln.setAttribute('x2', lx2); ln.setAttribute('y2', yy);
+    ln.setAttribute('stroke', '#333'); ln.setAttribute('stroke-width', '0.8');
+    svg.appendChild(ln);
+  }
+  var s;
+  if (step < 0) { for (s = -2; s >= step; s -= 2) addLine(baseY - s * stepPx); }
+  else if (step > 8) { for (s = 10; s <= step; s += 2) addLine(baseY - s * stepPx); }
+}
+
 
 // ── Build DOM ──
 var btnMap = {};
@@ -300,17 +588,18 @@ function buildGrid() {
   var grid = document.getElementById('accordion');
   grid.innerHTML = '';
   btnMap = {};
+  // 各キーボード行(row)を「縦の列」にする。
+  //  短三度: 上ほど高音・下ほど低音 ／ 左右: 数字列が左、KeyZ列が右
   for (var row = GRID_ROWS - 1; row >= 0; row--) {
-    var rowEl = document.createElement('div');
-    rowEl.className = 'acc-row';
-    rowEl.style.paddingLeft = ROW_STAGGER_PX[row] + 'px';
-    for (var col = 0; col < GRID_COLS; col++) {
+    var colEl = document.createElement('div');
+    colEl.className = 'acc-col';
+    colEl.style.marginTop = staggerMm(row);
+    colEl.style.marginBottom = '0px';
+
+    // 列内: 上から col降順(高音が上, 低音が下)
+    for (var col = GRID_COLS - 1; col >= 0; col--) {
       var code = ROW_CODES[row][col];
       if (!code) {
-        var sp = document.createElement('div');
-        sp.style.width = '38px'; sp.style.height = '38px';
-        sp.style.webkitFlexShrink = '0'; sp.style.flexShrink = '0';
-        rowEl.appendChild(sp);
         continue;
       }
       var midi = cellMidi(row, col);
@@ -318,8 +607,9 @@ function buildGrid() {
       var oct = noteOct(midi);
       var label = ROW_LABELS[row][col];
       var btn = document.createElement('div');
-      btn.className = 'btn' + (name === 'C' ? ' is-c' : '');
-      btn.innerHTML = '<span class="btn-note">' + name + '<sub style="font-size:5px;opacity:0.5">' + oct + '</sub></span><span class="btn-key">' + label + '</span>';
+      var isSharp = (name.indexOf('#') !== -1);
+      btn.className = 'btn ' + (isSharp ? 'note-sharp' : 'note-natural') + (name === 'C' ? ' is-c' : '');
+      btn.innerHTML = '<span class="btn-note">' + name + '<sub style="font-size:7px;opacity:0.5">' + oct + '</sub></span><span class="btn-key">' + label + '</span>';
 
       var h = makeHandler(code, row, col, btn);
       btn.addEventListener('mousedown', h.down, false);
@@ -330,9 +620,9 @@ function buildGrid() {
       btn.addEventListener('touchcancel', h.up, false);
 
       btnMap[code] = { el: btn, row: row, col: col };
-      rowEl.appendChild(btn);
+      colEl.appendChild(btn);
     }
-    grid.appendChild(rowEl);
+    grid.appendChild(colEl);
   }
 }
 
@@ -343,7 +633,7 @@ function refreshLabels() {
     var name = noteName(midi);
     var oct = noteOct(midi);
     var noteEl = entry.el.querySelector('.btn-note');
-    noteEl.innerHTML = name + '<sub style="font-size:5px;opacity:0.5">' + oct + '</sub>';
+    noteEl.innerHTML = name + '<sub style="font-size:7px;opacity:0.5">' + oct + '</sub>';
     var isC = (name === 'C');
     var cls = entry.el.className.replace(' is-c','');
     entry.el.className = isC ? cls + ' is-c' : cls;
@@ -443,6 +733,7 @@ function drawViz() {
 }
 drawViz();
 buildGrid();
+renderStaff();
 
 // 初回タップでオーディオ起動（iOS制約対策）
 document.body.addEventListener('touchstart', function once() {
