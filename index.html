@@ -383,16 +383,22 @@ function noteOn(code, freq) {
 function noteOff(code) {
   var node = activeNodes[code];
   if (!node || !actx) return;
+  // 先に参照を消す（連打時の二重管理を防ぐ）
+  delete activeNodes[code];
   var rel = parseFloat(document.getElementById('release').value);
   var now = actx.currentTime;
+  var g = node.gain.gain;
   try {
-    node.gain.gain.cancelScheduledValues(now);
-    node.gain.gain.setValueAtTime(node.gain.gain.value, now);
-    node.gain.gain.exponentialRampToValueAtTime(0.0001, now + rel);
+    g.cancelScheduledValues(now);
+    // 現在値を読み、0以下なら極小値にしてから線形で0へ（expの0エラー回避）
+    var cur = g.value;
+    if (!(cur > 0.0001)) cur = 0.0001;
+    g.setValueAtTime(cur, now);
+    g.linearRampToValueAtTime(0.0001, now + rel);
   } catch (e) {}
-  stopOsc(node.osc, now + rel + 0.05);
-  stopOsc(node.osc2, now + rel + 0.05);
-  delete activeNodes[code];
+  // オシレーターは必ず停止予約
+  try { stopOsc(node.osc, now + rel + 0.05); } catch (e2) {}
+  try { stopOsc(node.osc2, now + rel + 0.05); } catch (e3) {}
 }
 function triggerOn(code, midi, el) {
   if (activeNodes[code]) return;
@@ -668,9 +674,25 @@ document.addEventListener('keydown', function(e) {
 document.addEventListener('keyup', function(e) {
   var code = getCode(e);
   if (!code) return;
+  delete heldCodes[code];
   var entry = btnMap[code];
-  if (entry) { delete heldCodes[code]; triggerOff(code, entry.el); }
+  if (entry) { triggerOff(code, entry.el); }
+  else if (activeNodes[code]) { noteOff(code); delete soundingMidi[code]; renderStaff(); }
 }, false);
+
+// 保険: フォーカスが外れた/ウィンドウが隠れたら全部止める
+window.addEventListener('blur', stopAllNotes, false);
+document.addEventListener('visibilitychange', function(){ if (document.hidden) stopAllNotes(); }, false);
+function stopAllNotes() {
+  for (var c in activeNodes) { noteOff(c); }
+  heldCodes = {};
+  soundingMidi = {};
+  // 画面の active クラスも解除
+  for (var cc in btnMap) {
+    btnMap[cc].el.className = btnMap[cc].el.className.replace(' active','');
+  }
+  renderStaff();
+}
 
 // ── Octave ──
 var displayOctave = 4;
