@@ -649,13 +649,39 @@ function refreshLabels() {
 // ── Keyboard ──
 var heldCodes = {};
 
+// keyupが来ない環境(iPad Safari等)向けの自動停止:
+//  押している間はOSのキーリピートで keydown が繰り返し届くので、
+//  それを「まだ押されている」信号として使い、途切れたら自動で止める。
+//  keyupが一度でも観測できた環境では自動停止を無効化（通常動作）。
+var keyupWorks = false;
+var releaseTimers = {};
+var AUTO_RELEASE_MS = 900; // 初回リピート開始の遅延(~500ms)より長く
+
+function scheduleAutoRelease(code) {
+  if (keyupWorks) return;
+  if (releaseTimers[code]) clearTimeout(releaseTimers[code]);
+  releaseTimers[code] = setTimeout(function() {
+    delete releaseTimers[code];
+    delete heldCodes[code];
+    var entry = btnMap[code];
+    if (entry) { triggerOff(code, entry.el); }
+    else if (activeNodes[code]) { noteOff(code); delete soundingMidi[code]; renderStaff(); }
+  }, AUTO_RELEASE_MS);
+}
+
 document.addEventListener('keydown', function(e) {
   var code = getCode(e);
   document.getElementById('debug').textContent =
     'code: "' + (e.code || '(非対応)') + '"  keyCode: ' + e.keyCode + '  → ' + (code || '未割当');
 
-  if (e.repeat || e.ctrlKey || e.altKey || e.metaKey) return;
+  if (e.ctrlKey || e.altKey || e.metaKey) return;
   if (!code) return;
+
+  // リピートイベントは「押しっぱなし」信号としてタイマー更新のみ
+  if (e.repeat) {
+    if (heldCodes[code]) { e.preventDefault(); scheduleAutoRelease(code); }
+    return;
+  }
 
   if (code === 'ArrowDown') { changeOctave(-1); return; }
   if (code === 'ArrowUp')   { changeOctave(1);  return; }
@@ -668,11 +694,16 @@ document.addEventListener('keydown', function(e) {
     ensureAudio();
     heldCodes[code] = true;
     triggerOn(code, cellMidi(entry.row, entry.col), entry.el);
+    scheduleAutoRelease(code);
   }
 }, false);
 
 document.addEventListener('keyup', function(e) {
   var code = getCode(e);
+  document.getElementById('debug').textContent =
+    'KEYUP code: "' + (e.code || '?') + '"  → ' + (code || '未割当');
+  keyupWorks = true; // keyupが来る環境と判明 → 自動停止を無効化
+  if (releaseTimers[code]) { clearTimeout(releaseTimers[code]); delete releaseTimers[code]; }
   if (!code) return;
   delete heldCodes[code];
   var entry = btnMap[code];
