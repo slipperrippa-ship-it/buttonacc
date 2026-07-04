@@ -171,9 +171,9 @@ select { background:#2a1f10; border:1px solid #7a5518; color:#c8963c; font-famil
     <div class="ctrl">
       <div class="ctrl-label">WAVE</div>
       <select id="waveform">
-        <option value="sawtooth" selected>SAW</option>
+        <option value="triangle" selected>TRI</option>
+        <option value="sawtooth">SAW</option>
         <option value="sine">SINE</option>
-        <option value="triangle">TRI</option>
         <option value="square">SQR</option>
       </select>
     </div>
@@ -406,6 +406,7 @@ function triggerOn(code, midi, el) {
   el.className = el.className.replace(' active','') + ' active';
   soundingMidi[code] = displayMidi(midi); // オクターブシフトを除いた基準音を表示
   renderStaff();
+  if (typeof wakeViz === 'function') wakeViz();
 }
 function triggerOff(code, el) {
   if (!activeNodes[code]) return;
@@ -621,8 +622,14 @@ function buildGrid() {
       btn.addEventListener('mousedown', h.down, false);
       btn.addEventListener('mouseup', h.up, false);
       btn.addEventListener('mouseleave', h.up, false);
-      btn.addEventListener('touchstart', h.down, false);
-      btn.addEventListener('touchend', h.up, false);
+      // passive:false 対応ブラウザでは指定し、旧ブラウザではfalse扱い
+      try {
+        btn.addEventListener('touchstart', h.down, {passive:false});
+        btn.addEventListener('touchend', h.up, {passive:false});
+      } catch (evtErr) {
+        btn.addEventListener('touchstart', h.down, false);
+        btn.addEventListener('touchend', h.up, false);
+      }
       btn.addEventListener('touchcancel', h.up, false);
 
       btnMap[code] = { el: btn, row: row, col: col };
@@ -648,17 +655,16 @@ function refreshLabels() {
 
 // ── Keyboard ──
 var heldCodes = {};
+var debugEl = document.getElementById('debug');
 
-// keyupが来ない環境(iPad Safari等)向けの自動停止:
+// keyupが来ない/不安定な環境(iPad Safari等)向けの自動停止:
 //  押している間はOSのキーリピートで keydown が繰り返し届くので、
 //  それを「まだ押されている」信号として使い、途切れたら自動で止める。
-//  keyupが一度でも観測できた環境では自動停止を無効化（通常動作）。
-var keyupWorks = false;
+//  keyupが来た場合は即座に止まる（自動停止は常に併用＝保険）。
 var releaseTimers = {};
 var AUTO_RELEASE_MS = 900; // 初回リピート開始の遅延(~500ms)より長く
 
 function scheduleAutoRelease(code) {
-  if (keyupWorks) return;
   if (releaseTimers[code]) clearTimeout(releaseTimers[code]);
   releaseTimers[code] = setTimeout(function() {
     delete releaseTimers[code];
@@ -671,7 +677,7 @@ function scheduleAutoRelease(code) {
 
 document.addEventListener('keydown', function(e) {
   var code = getCode(e);
-  document.getElementById('debug').textContent =
+  debugEl.textContent =
     'code: "' + (e.code || '(非対応)') + '"  keyCode: ' + e.keyCode + '  → ' + (code || '未割当');
 
   if (e.ctrlKey || e.altKey || e.metaKey) return;
@@ -700,9 +706,8 @@ document.addEventListener('keydown', function(e) {
 
 document.addEventListener('keyup', function(e) {
   var code = getCode(e);
-  document.getElementById('debug').textContent =
+  debugEl.textContent =
     'KEYUP code: "' + (e.code || '?') + '"  → ' + (code || '未割当');
-  keyupWorks = true; // keyupが来る環境と判明 → 自動停止を無効化
   if (releaseTimers[code]) { clearTimeout(releaseTimers[code]); delete releaseTimers[code]; }
   if (!code) return;
   delete heldCodes[code];
@@ -716,6 +721,8 @@ window.addEventListener('blur', stopAllNotes, false);
 document.addEventListener('visibilitychange', function(){ if (document.hidden) stopAllNotes(); }, false);
 function stopAllNotes() {
   for (var c in activeNodes) { noteOff(c); }
+  for (var t in releaseTimers) { clearTimeout(releaseTimers[t]); }
+  releaseTimers = {};
   heldCodes = {};
   soundingMidi = {};
   // 画面の active クラスも解除
@@ -756,34 +763,48 @@ bindSlider('reverb','revV'); bindSlider('volume','volV');
 // ── Visualizer ──
 var canvas = document.getElementById('viz');
 var cvCtx = canvas.getContext('2d');
+var vizBuf = null; // 再利用バッファ
 function resizeCanvas() { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; }
 resizeCanvas();
 window.addEventListener('resize', resizeCanvas, false);
 
+function hasActiveNotes() {
+  for (var k in activeNodes) return true;
+  return false;
+}
+
+var vizIdle = true;
 function drawViz() {
-  if (window.requestAnimationFrame) requestAnimationFrame(drawViz);
-  else setTimeout(drawViz, 50);
-  if (!analyser) {
+  // 音が鳴っていない間は描画ループを止める（バッテリー節約）
+  if (!analyser || !hasActiveNotes()) {
     cvCtx.fillStyle = '#2a1f10';
     cvCtx.fillRect(0, 0, canvas.width, canvas.height);
-    return;
+    vizIdle = true;
+    return; // ループ停止。次のtriggerOnで再開
   }
-  var buf = new Uint8Array(analyser.frequencyBinCount);
-  analyser.getByteTimeDomainData(buf);
+  vizIdle = false;
+  if (window.requestAnimationFrame) requestAnimationFrame(drawViz);
+  else setTimeout(drawViz, 50);
+
+  if (!vizBuf || vizBuf.length !== analyser.frequencyBinCount) {
+    vizBuf = new Uint8Array(analyser.frequencyBinCount);
+  }
+  analyser.getByteTimeDomainData(vizBuf);
   cvCtx.fillStyle = 'rgba(26,18,8,0.7)';
   cvCtx.fillRect(0, 0, canvas.width, canvas.height);
   cvCtx.lineWidth = 1.5;
   cvCtx.strokeStyle = '#c8963c';
   cvCtx.beginPath();
-  var sw = canvas.width / buf.length;
+  var sw = canvas.width / vizBuf.length;
   var x = 0;
-  for (var i = 0; i < buf.length; i++) {
-    var y = (buf[i] / 128) * canvas.height / 2;
+  for (var i = 0; i < vizBuf.length; i++) {
+    var y = (vizBuf[i] / 128) * canvas.height / 2;
     if (i === 0) cvCtx.moveTo(x, y); else cvCtx.lineTo(x, y);
     x += sw;
   }
   cvCtx.stroke();
 }
+function wakeViz() { if (vizIdle) { vizIdle = false; drawViz(); } }
 drawViz();
 buildGrid();
 renderStaff();
