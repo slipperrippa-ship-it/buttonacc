@@ -155,6 +155,21 @@ select { background:#2a1f10; border:1px solid #7a5518; color:#c8963c; font-famil
   position:relative;
   top:340px; left:0;
 }
+/* レジスター切替ボタン（五線譜の横に縦並び） */
+.reg-col {
+  position:-webkit-sticky; position:sticky; top:8px;
+  -webkit-flex-shrink:0; flex-shrink:0;
+  display:-webkit-flex; display:flex; -webkit-flex-direction:column; flex-direction:column;
+  -webkit-justify-content:space-between; justify-content:space-between;
+  height:344px;
+}
+.reg-btn {
+  width:46px; height:34px; padding:0;
+  background:#2a1f10; border:1px solid #7a5518; border-radius:4px;
+  color:#c8963c; font-family:inherit; font-size:12px; font-weight:bold; letter-spacing:1px;
+  cursor:pointer;
+}
+.reg-btn.on { background:#c8963c; color:#2a1f10; border-color:#ffe08a; }
 </style>
 </head>
 <body>
@@ -168,29 +183,6 @@ select { background:#2a1f10; border:1px solid #7a5518; color:#c8963c; font-famil
   <div class="viz-frame"><canvas id="viz"></canvas></div>
 
   <div class="controls">
-    <div class="ctrl">
-      <div class="ctrl-label">WAVE</div>
-      <select id="waveform">
-        <option value="triangle" selected>TRI</option>
-        <option value="sawtooth">SAW</option>
-        <option value="sine">SINE</option>
-        <option value="square">SQR</option>
-      </select>
-    </div>
-    <div class="ctrl">
-      <div class="ctrl-label">REGISTER</div>
-      <select id="register">
-        <option value="L">L 低音</option>
-        <option value="M">M 中音</option>
-        <option value="LM" selected>LM バンドネオン</option>
-        <option value="MM">MM バイオリン</option>
-        <option value="LMM">LMM アコーディオン</option>
-        <option value="MMM">MMM ミュゼット</option>
-        <option value="MH">MH オーボエ</option>
-        <option value="LH">LH オルガン</option>
-        <option value="LMH">LMH ハーモニウム</option>
-      </select>
-    </div>
     <div class="ctrl">
       <div class="ctrl-label">ATTACK</div>
       <input type="range" id="attack" min="0.005" max="0.4" step="0.005" value="0.02">
@@ -227,6 +219,7 @@ select { background:#2a1f10; border:1px solid #7a5518; color:#c8963c; font-famil
     <div class="staff-panel">
       <svg id="staff" viewBox="0 0 340 96" preserveAspectRatio="xMidYMid meet"></svg>
     </div>
+    <div class="reg-col" id="regCol"></div>
     <div class="accordion-body">
       <div class="acc-grid" id="accordion"></div>
     </div>
@@ -391,23 +384,23 @@ var REGISTERS = {
   'LH':  [{oct:-1, cents:0,   g:0.9},  {oct:1, cents:2, g:0.6}],
   'LMH': [{oct:-1, cents:0,   g:0.8},  {oct:0, cents:2, g:1.0}, {oct:1, cents:3, g:0.55}]
 };
-function currentRegister() {
-  var el = document.getElementById('register');
-  var key = el ? el.value : 'LM';
-  return REGISTERS[key] || REGISTERS['LM'];
-}
+var REGISTER_ORDER = ['L','M','LM','MM','LMM','MMM','MH','LH','LMH'];
+var REGISTER_NAMES = {L:'低音', M:'中音', LM:'バンドネオン', MM:'バイオリン', LMM:'アコーディオン',
+  MMM:'ミュゼット', MH:'オーボエ', LH:'オルガン', LMH:'ハーモニウム'};
+var currentRegKey = 'LM';
+function currentRegister() { return REGISTERS[currentRegKey] || REGISTERS['LM']; }
 
 function noteOn(code, freq) {
   if (!actx) return;
   if (activeNodes[code]) return;
   var atk = parseFloat(document.getElementById('attack').value);
-  var wave = document.getElementById('waveform').value;
+  var wave = 'square';
   var reeds = currentRegister();
   var now = actx.currentTime;
   var gain = actx.createGain();
   gain.gain.setValueAtTime(0.0001, now);
   // リードの数が増えても音量が跳ね上がらないよう √n で正規化（旧2オシレーター時とほぼ同じ音量）
-  gain.gain.linearRampToValueAtTime(0.4 / Math.sqrt(reeds.length), now + atk);
+  gain.gain.linearRampToValueAtTime(0.24 / Math.sqrt(reeds.length), now + atk);
   gain.connect(masterGain);
   var oscs = [];
   for (var i = 0; i < reeds.length; i++) {
@@ -805,21 +798,36 @@ function bindSlider(id, valId) {
 bindSlider('attack','atkV'); bindSlider('release','relV');
 bindSlider('reverb','revV'); bindSlider('volume','volV');
 
-// ── Selects ──
-// 選んだ後はフォーカスを外す（↑↓キーのオクターブ操作でメニューが動かないように）
-// レジスターは前回の選択を覚えておく
+// ── レジスターボタン ──
+// 押すと即切替。前回の選択は覚えておく。
 (function() {
-  var reg = document.getElementById('register');
+  var col = document.getElementById('regCol');
   try {
     var saved = window.localStorage && localStorage.getItem('buttonacc.register');
-    if (saved && REGISTERS[saved]) reg.value = saved;
+    if (saved && REGISTERS[saved]) currentRegKey = saved;
   } catch (e) {}
-  reg.addEventListener('change', function() {
-    try { localStorage.setItem('buttonacc.register', reg.value); } catch (e) {}
-    reg.blur();
-  }, false);
-  var wf = document.getElementById('waveform');
-  wf.addEventListener('change', function() { wf.blur(); }, false);
+  var btns = {};
+  function refresh() {
+    for (var k in btns) btns[k].className = 'reg-btn' + (k === currentRegKey ? ' on' : '');
+  }
+  for (var i = 0; i < REGISTER_ORDER.length; i++) {
+    (function(key) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = key;
+      b.title = key + ' ' + REGISTER_NAMES[key];
+      b.setAttribute('tabindex', '-1'); // キーボード演奏の邪魔をしない
+      b.addEventListener('click', function() {
+        currentRegKey = key;
+        try { localStorage.setItem('buttonacc.register', key); } catch (e) {}
+        refresh();
+        b.blur();
+      }, false);
+      btns[key] = b;
+      col.appendChild(b);
+    })(REGISTER_ORDER[i]);
+  }
+  refresh();
 })();
 
 // ── Visualizer ──
