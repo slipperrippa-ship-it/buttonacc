@@ -178,6 +178,20 @@ select { background:#2a1f10; border:1px solid #7a5518; color:#c8963c; font-famil
       </select>
     </div>
     <div class="ctrl">
+      <div class="ctrl-label">REGISTER</div>
+      <select id="register">
+        <option value="L">L 低音</option>
+        <option value="M">M 中音</option>
+        <option value="LM" selected>LM バンドネオン</option>
+        <option value="MM">MM バイオリン</option>
+        <option value="LMM">LMM アコーディオン</option>
+        <option value="MMM">MMM ミュゼット</option>
+        <option value="MH">MH オーボエ</option>
+        <option value="LH">LH オルガン</option>
+        <option value="LMH">LMH ハーモニウム</option>
+      </select>
+    </div>
+    <div class="ctrl">
       <div class="ctrl-label">ATTACK</div>
       <input type="range" id="attack" min="0.005" max="0.4" step="0.005" value="0.02">
       <div class="ctrl-val" id="atkV">0.02</div>
@@ -362,23 +376,53 @@ function ensureAudio() {
 function startOsc(osc, t) { if (osc.start) osc.start(t); else if (osc.noteOn) osc.noteOn(t); }
 function stopOsc(osc, t)  { if (osc.stop) osc.stop(t); else if (osc.noteOff) osc.noteOff(t); }
 
+// ── レジスター（リードの組み合わせ） ──
+// oct: 0=M(中音・8'), -1=L(低音・16'), +1=H(高音・4')
+// cents: 中音どうしのうなり（ミュゼットの揺れ）
+// g: リードごとの音量比
+var REGISTERS = {
+  'L':   [{oct:-1, cents:0,   g:1.0}],
+  'M':   [{oct:0,  cents:0,   g:1.0}],
+  'LM':  [{oct:-1, cents:0,   g:0.85}, {oct:0, cents:2, g:1.0}],
+  'MM':  [{oct:0,  cents:0,   g:1.0},  {oct:0, cents:12, g:1.0}],
+  'LMM': [{oct:-1, cents:0,   g:0.8},  {oct:0, cents:0, g:1.0}, {oct:0, cents:12, g:0.9}],
+  'MMM': [{oct:0,  cents:-14, g:0.9},  {oct:0, cents:0, g:1.0}, {oct:0, cents:14, g:0.9}],
+  'MH':  [{oct:0,  cents:0,   g:1.0},  {oct:1, cents:2, g:0.6}],
+  'LH':  [{oct:-1, cents:0,   g:0.9},  {oct:1, cents:2, g:0.6}],
+  'LMH': [{oct:-1, cents:0,   g:0.8},  {oct:0, cents:2, g:1.0}, {oct:1, cents:3, g:0.55}]
+};
+function currentRegister() {
+  var el = document.getElementById('register');
+  var key = el ? el.value : 'LM';
+  return REGISTERS[key] || REGISTERS['LM'];
+}
+
 function noteOn(code, freq) {
   if (!actx) return;
   if (activeNodes[code]) return;
   var atk = parseFloat(document.getElementById('attack').value);
   var wave = document.getElementById('waveform').value;
-  var osc = actx.createOscillator();
-  var osc2 = actx.createOscillator();
-  var gain = actx.createGain();
-  osc.type = wave; osc2.type = wave;
+  var reeds = currentRegister();
   var now = actx.currentTime;
-  osc.frequency.setValueAtTime(freq, now);
-  osc2.frequency.setValueAtTime(freq * 1.003, now);
+  var gain = actx.createGain();
   gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.linearRampToValueAtTime(0.28, now + atk);
-  osc.connect(gain); osc2.connect(gain); gain.connect(masterGain);
-  startOsc(osc, now); startOsc(osc2, now);
-  activeNodes[code] = { osc: osc, osc2: osc2, gain: gain };
+  // リードの数が増えても音量が跳ね上がらないよう √n で正規化（旧2オシレーター時とほぼ同じ音量）
+  gain.gain.linearRampToValueAtTime(0.4 / Math.sqrt(reeds.length), now + atk);
+  gain.connect(masterGain);
+  var oscs = [];
+  for (var i = 0; i < reeds.length; i++) {
+    var r = reeds[i];
+    var osc = actx.createOscillator();
+    osc.type = wave;
+    // detune非対応の旧WebKitでも動くよう、周波数を直接計算
+    osc.frequency.setValueAtTime(freq * Math.pow(2, r.oct + r.cents / 1200), now);
+    var rg = actx.createGain();
+    rg.gain.value = r.g;
+    osc.connect(rg); rg.connect(gain);
+    startOsc(osc, now);
+    oscs.push(osc);
+  }
+  activeNodes[code] = { oscs: oscs, gain: gain };
 }
 function noteOff(code) {
   var node = activeNodes[code];
@@ -397,8 +441,9 @@ function noteOff(code) {
     g.linearRampToValueAtTime(0.0001, now + rel);
   } catch (e) {}
   // オシレーターは必ず停止予約
-  try { stopOsc(node.osc, now + rel + 0.05); } catch (e2) {}
-  try { stopOsc(node.osc2, now + rel + 0.05); } catch (e3) {}
+  for (var i = 0; i < node.oscs.length; i++) {
+    try { stopOsc(node.oscs[i], now + rel + 0.05); } catch (e2) {}
+  }
 }
 function triggerOn(code, midi, el) {
   if (activeNodes[code]) return;
@@ -759,6 +804,23 @@ function bindSlider(id, valId) {
 }
 bindSlider('attack','atkV'); bindSlider('release','relV');
 bindSlider('reverb','revV'); bindSlider('volume','volV');
+
+// ── Selects ──
+// 選んだ後はフォーカスを外す（↑↓キーのオクターブ操作でメニューが動かないように）
+// レジスターは前回の選択を覚えておく
+(function() {
+  var reg = document.getElementById('register');
+  try {
+    var saved = window.localStorage && localStorage.getItem('buttonacc.register');
+    if (saved && REGISTERS[saved]) reg.value = saved;
+  } catch (e) {}
+  reg.addEventListener('change', function() {
+    try { localStorage.setItem('buttonacc.register', reg.value); } catch (e) {}
+    reg.blur();
+  }, false);
+  var wf = document.getElementById('waveform');
+  wf.addEventListener('change', function() { wf.blur(); }, false);
+})();
 
 // ── Visualizer ──
 var canvas = document.getElementById('viz');
